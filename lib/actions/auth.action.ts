@@ -106,6 +106,13 @@ export async function getCurrentUser():Promise<User|null> {
 }
 
 export async function isAuthenticated() {
-    const user =await getCurrentUser();
-    return !!user;
+    const user = await getCurrentUser();
+    console.log("Authenticated User:", user); // Debug log
+    return user;
+}
+
+
+export async function clearSessionCookies() {
+    const cookieStore = await cookies();
+    cookieStore.delete('session');
 }
