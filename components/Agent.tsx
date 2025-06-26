@@ -26,8 +26,6 @@ const Agent = ({userName,userId,type,interviewId,questions}:AgentProps) => {
     const [messages,setMessages]=useState<SavedMessages[]>([]);
 
     useEffect(()=>{
-        if (!vapi) return;
-
         const onCallStart=()=>setCallStatus(CallStatus.ACTIVE);
         const onCallEnd=()=>setCallStatus(CallStatus.FINISHED);
         const onMessage = (message: Message) => {
@@ -83,11 +81,6 @@ const Agent = ({userName,userId,type,interviewId,questions}:AgentProps) => {
     },[messages,callStatus,type,userId,router,interviewId]);
 
     const handleCall=async()=>{
-        if (!vapi) {
-            console.error('VAPI not initialized');
-            return;
-        }
-
         try {
             setCallStatus(CallStatus.CONNECTING);
 
@@ -126,21 +119,12 @@ const Agent = ({userName,userId,type,interviewId,questions}:AgentProps) => {
     }
 
     const handleDisconnect=async()=>{
-        if (!vapi) return;
         setCallStatus(CallStatus.FINISHED);
         vapi.stop();
     }
 
     const latestMessage=messages[messages.length-1]?.content;
     const isCallInactiveOrFinished=callStatus===CallStatus.INACTIVE||callStatus===CallStatus.FINISHED;
-
-    if (!vapi) {
-        return (
-            <div className="flex items-center justify-center min-h-[400px]">
-                <p>VAPI not available. Please check your configuration.</p>
-            </div>
-        );
-    }
 
     return (  
         <>
