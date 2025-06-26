@@ -1,13 +1,12 @@
 'use client';
 import React, { useEffect } from 'react'
 import Image from 'next/image'
-import clsx from 'clsx'; // or import cn from 'classnames'
-import { UserRecord } from 'firebase-admin/auth';
+import clsx from 'clsx';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { vapi} from '@/lib/vapi.sdk';
-import { error } from 'console';
 import { interviewer } from '@/constants';
+
 enum CallStatus{
     INACTIVE='INACTIVE',
     CONNECTING='CONNECTING',
@@ -22,10 +21,9 @@ interface SavedMessages{
 
 const Agent = ({userName,userId,type,interviewId,questions}:AgentProps) => {
     const router=useRouter();
-    const [isSpeaking,setIsSpeaking]=useState();
+    const [isSpeaking,setIsSpeaking]=useState(false);
     const [callStatus,setCallStatus]=useState<CallStatus>(CallStatus.INACTIVE);
     const [messages,setMessages]=useState<SavedMessages[]>([]);
-
 
     useEffect(()=>{
         const onCallStart=()=>setCallStatus(CallStatus.ACTIVE);
@@ -37,7 +35,6 @@ const Agent = ({userName,userId,type,interviewId,questions}:AgentProps) => {
             }
         };
         
-
         const onSpeechStart=()=>setIsSpeaking(true);
         const onSpeechEnd=()=>setIsSpeaking(false);
         const onError=(error:Error)=>console.log('Error',error);
@@ -81,96 +78,120 @@ const Agent = ({userName,userId,type,interviewId,questions}:AgentProps) => {
                 handleGenerateFeedback(messages);
             }
         }
-        if(callStatus===CallStatus.FINISHED)router.push('/');
-    },[messages,callStatus,type,userId]);
+    },[messages,callStatus,type,userId,router,interviewId]);
 
     const handleCall=async()=>{
-        setCallStatus(CallStatus.CONNECTING);
+        try {
+            setCallStatus(CallStatus.CONNECTING);
 
-        if(type==='generate'){
-            await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!,{
-                variableValues:{
-                    username:userName,
-                    userid:userId,
-    
+            if(type==='generate'){
+                const workflowId = process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID;
+                if (!workflowId) {
+                    console.error('VAPI Workflow ID not configured');
+                    setCallStatus(CallStatus.INACTIVE);
+                    return;
                 }
-            })
-        }else{
-            let formattedQuestions='';
-            if(questions){
-                formattedQuestions=questions
-                .map((questions)=>'-${question')
-                .join('\n');
+                
+                await vapi.start(workflowId, {
+                    variableValues:{
+                        username:userName,
+                        userid:userId,
+                    }
+                })
+            }else{
+                let formattedQuestions='';
+                if(questions){
+                    formattedQuestions=questions
+                    .map((question)=>`- ${question}`)
+                    .join('\n');
+                }
+
+                await vapi.start(interviewer,{
+                    variableValues:{
+                        questions:formattedQuestions
+                    }
+                })
             }
-
-            await vapi.start(interviewer,{
-                variableValues:{
-                    questions:formattedQuestions
-                }
-            })
+        } catch (error) {
+            console.error('Error starting call:', error);
+            setCallStatus(CallStatus.INACTIVE);
         }
-        
-        ;
-
     }
 
-    const handleDissconnect=async()=>{
+    const handleDisconnect=async()=>{
         setCallStatus(CallStatus.FINISHED);
-
         vapi.stop();
     }
 
     const latestMessage=messages[messages.length-1]?.content;
     const isCallInactiveOrFinished=callStatus===CallStatus.INACTIVE||callStatus===CallStatus.FINISHED;
 
+    return (  
+        <>
+            <div className='call-view'>
+                <div className='card-interviewer'>
+                    <div className='avatar'>
+                        <Image  
+                            src="/ai-avatar.png" 
+                            alt="vapi" 
+                            width={65} 
+                            height={54} 
+                            className='object-cover' 
+                        />
+                        {isSpeaking && <span className='animate-speak'/>}
+                    </div>
+                    <h3>AI interviewer</h3>
+                </div>
 
-  return (  
-  <>
-  <div className='call-view'>
-        <div className='card-interviewer'>
-            <div className='avatar'>
-                <Image  src="/ai-avatar.png" alt="vapi" width={65} height={54} className='object-cover' />
-                {isSpeaking && <span className='animate-speak'/>}
+                <div className='card-border'>
+                    <div className='card-content'>
+                        <Image 
+                            src="/user-avatar.png" 
+                            alt="user avatar" 
+                            width={120} 
+                            height={120} 
+                            className='rounded-full object-cover size-[120px]'
+                        />
+                        <h3>{userName || 'User'}</h3>
+                    </div>
+                </div>
             </div>
-            <h3>AI interviewer</h3>
-
-        </div>
-
-        <div className='card-border'>
-            <div className='card-content'>
-                <Image src="/user-avatar.png" alt="user avatar" width={540} height={540} className='rounded-full object-cover size-[120px]'/>
-                <h3>{userName}</h3>
+            
+            {messages.length > 0 && (
+                <div className='transcript-border'>
+                    <div className='transcript'>
+                        <p 
+                            key={latestMessage}
+                            className={clsx(
+                                'transition-opacity duration-500 opacity-0',
+                                'animate-fadeIn opacity-100'
+                            )}
+                        >
+                            {latestMessage}
+                        </p>
+                    </div>
+                </div>
+            )}
+            
+            <div className='w-full flex justify-center'>
+                {callStatus !== 'ACTIVE' ? (
+                    <button className='relative btn-call' onClick={handleCall}>
+                        <span className={clsx(
+                            'absolute animate-ping rounded-full opacity-75',
+                            callStatus !== 'CONNECTING' && 'hidden'
+                        )}/>
+                        <span>
+                            {isCallInactiveOrFinished ? 'Call' : 'Connecting...'}
+                        </span>
+                    </button>
+                ) : (
+                    <button className='btn-disconnect' onClick={handleDisconnect}>
+                        End
+                    </button>
+                )}
             </div>
-        </div>
-    </div>
-    {messages.length>0&&(
-        <div className='transcript-border'>
-            <div className='transcript'>
-                <p key={latestMessage}className={clsx('transition-opacity duration-500 opacity-0','animate-fadeIn opacity-100')}>
-                    {latestMessage}
-                </p>
-            </div>
-        </div>
-    )}
-    <div className='w-full flex justify-center'>
-        {callStatus!== 'ACTIVE'?(
-            <button className='relative btn-call' onClick={handleCall}>
-                <span className={clsx('absolute animate-ping rounded-full opacity-75',callStatus!=='CONNECTING'&&'hidden')}/>
-                    
-                <span>
-                {isCallInactiveOrFinished?'Call':'....'}
-                </span>
-            </button>
-        ):(
-            <button className='btn-disconnect' onClick={handleDissconnect}>
-                End
-            </button>
-        )}
-    </div>
-  </>
-  
-    
-  )
+        </>
+    )
 }
 
 export default Agent
